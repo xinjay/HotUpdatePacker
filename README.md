@@ -44,4 +44,4 @@ HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序
 
 - 持续优化HotUpdatePacker方案；
 
-
+- 接入XLua拆分出LuaWrap以支持LuaWrap热更；
