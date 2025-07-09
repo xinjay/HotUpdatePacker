@@ -2,7 +2,7 @@
 
 [![license](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/xinjay/HotUpdatePacker/blob/master/LICENSE)
 
-[Github](https://github.com/xinjay/HotUpdatePacker) | [Gitee](https://gitee.com/xinjay/hot-update-packer)
+[CSDN](https://blog.csdn.net/xinjay1992/article/details/149230040) |[Github](https://github.com/xinjay/HotUpdatePacker) | [Gitee](https://gitee.com/xinjay/hot-update-packer)
 
 HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序集**（Assembly-CSharp.dll)的子程序集热更。
 
@@ -36,7 +36,7 @@ HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序
 
 - 在定义热更程序集时被依赖的程序集需要放前面，如下：
   
-  ![](C:\Users\DZQ-830\AppData\Roaming\marktext\images\2025-07-09-17-24-55-image.png)
+  ![](Image/guide.png)
 
 ## 未来计划
 
