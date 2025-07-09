@@ -24,13 +24,12 @@ namespace HotUpdatePacker.Editor.Settings
     [CreateAssetMenu(menuName = "CreateHotUpdateBuildSettings")]
     public class HotUpdateBuildSettings : ScriptableObject
     {
-        //public bool autoCopyAOT = false;
         public string commitPrefix = "[XXXX]";
         public VersionControlType versionControl;
-        public string HotUpdateSettingsFile = "Assets/Res/Assembly//HotUpdateSettings.bytes";
-        public string AOTDllBackupDir = "HotUpdateData/AOTBackup";
-        public string AOTMetaDllDir = "Assets/Assembly/AOTMeta";
-        public string HotUpdateDllDir = "Assets/Assembly/HotUpdate";
+        public string HotUpdateSettingsFile = "Assets/Sample/Res/Assembly/HotUpdateSettings.bytes";
+        public string AOTDllBackupDir = "HotUpdatePacker/AOTBackup";
+        public string AOTMetaDllDir = "Assets/Sample/Res/Assembly/AOTMeta";
+        public string HotUpdateDllDir = "Assets/Sample/Res/Assembly/HotUpdate";
         public HotUpdateItem[] HotUpdateItems;
 
         private const string buildSettingFile = "ProjectSettings/HotUpdateBuildSettings.asset";

@@ -142,7 +142,6 @@ namespace HotUpdatePacker.Editor
                 {
                     Thread.Sleep(1000);
                 }
-
                 AssemblyBuilderManager.Build(param);
             }
 
