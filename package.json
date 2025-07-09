@@ -1,0 +1,20 @@
+{
+  "name": "com.xinjay.hotupdatepacker",
+  "version": "1.0.0",
+  "displayName": "HotUpdatePacker",
+  "description": "HotUpdatePacker is an extension of HybridCLR, which supports hot updates for sub-assemblies that rely on default assembly(Assembly-CSharp.dll).",
+  "category": "Scripting",
+  "license": "MIT",
+  "keywords": [
+    "HybridCLR",
+    "HotUpdatePacker",
+    "hotupdate",
+    "hotfix",
+	"C# hotupdate"
+  ],
+  "author": {
+    "name": "xinjay",
+    "email": "xinjay@outlook.com",
+    "url": "https://github.com/xinjay"
+  }
+}
