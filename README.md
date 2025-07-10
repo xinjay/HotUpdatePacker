@@ -45,3 +45,7 @@ HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序
 - 持续优化HotUpdatePacker方案；
 
 - 接入XLua拆分出LuaWrap以支持LuaWrap热更；
+
+## 参考
+
+演示demo(HotUpdatePackerDemo) [Gitee](https://gitee.com/xinjay/hot-update-packer-demo) | [Github](https://github.com/xinjay/HotUpdatePackerDemo)
