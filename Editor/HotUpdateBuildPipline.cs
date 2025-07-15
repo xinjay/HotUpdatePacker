@@ -24,8 +24,7 @@ namespace HotUpdatePacker.Editor
         None = 0,
         Dev = 1,
         Full = 1 << 1,
-        AutoBackup = 1 << 2,
-        ThrowIfMetaMissing = 1 << 3,
+        FastBuild = 1 << 2,
         Dev_Full = Dev | Full
     }
 
@@ -40,13 +39,10 @@ namespace HotUpdatePacker.Editor
         /// <param name="full"></param>
         /// <param name="autoBackup"></param>
         /// <param name="throwIfMetaMissing"></param>
-        public static async Task
-            HotUpdateCompile(BuildTarget target, HotUpdatePackFlag flag = HotUpdatePackFlag.None)
+        public static void HotUpdateCompile(BuildTarget target, HotUpdatePackFlag flag = HotUpdatePackFlag.None)
         {
             var full = flag.HasTarget(HotUpdatePackFlag.Full);
             var developmentBuild = flag.HasTarget(HotUpdatePackFlag.Dev);
-            var throwIfMetaMissing = flag.HasTarget(HotUpdatePackFlag.ThrowIfMetaMissing);
-            var autoBackup = flag.HasTarget(HotUpdatePackFlag.AutoBackup);
             var targetGroup = BuildPipeline.GetBuildTargetGroup(target);
 
             Debug.LogWarning($"----------------HotUpdateCompile:FullCompile:{full}----------------");
@@ -55,23 +51,20 @@ namespace HotUpdatePacker.Editor
             DoHybridHotUpdateCompile(target, developmentBuild);
             EditorUtility.DisplayProgressBar("Compiling", "CustomHotUpdateAssemblies", 0.2f);
             DoCustomCompile(target, targetGroup, developmentBuild);
-            if (full)
+            //先执行上次build的aot元数据裁剪校验
+            EditorUtility.DisplayProgressBar("Compiling", "AOTMetaMissingCheck", 0.3f);
+            var success = AOTMetaMissingCheck(target, !full);
+            //完全编译并且和上次aot元数据裁剪校验没通过时，才执行完整编译
+            if (!success && full)
             {
-                EditorUtility.DisplayProgressBar("Compiling", "MetaGenerate", 0.3f);
+                EditorUtility.DisplayProgressBar("Compiling", "MetaGenerate", 0.4f);
                 DoHybridMetaGenerate(target);
-                EditorUtility.DisplayProgressBar("Compiling", "StripAOT", 0.4f);
+                EditorUtility.DisplayProgressBar("Compiling", "StripAOT", 0.5f);
                 StripAOTAssemblyMetadata(target);
-                if (autoBackup)
-                {
-                    EditorUtility.DisplayProgressBar("Compiling", "BackupAOTAssemblies", 0.5f);
-                    BackupAOTAssemblies(target);
-                }
+                EditorUtility.DisplayProgressBar("Compiling", "BackupAOTAssemblies", 0.6f);
+                BackupAOTAssemblies(target);
             }
 
-            EditorUtility.DisplayProgressBar("Compiling", "AOTMetaMissingCheck(Last Build)", 0.6f);
-            AOTMetaMissingCheck(false, target);
-            EditorUtility.DisplayProgressBar("Compiling", "AOTMetaMissingCheck(Last Backup)", 0.7f);
-            AOTMetaMissingCheck(true, target, throwIfMetaMissing);
             EditorUtility.DisplayProgressBar("Compiling", "CopyHotUpdateAssemblies", 0.8f);
             CopyHotUpdateAssemblies(target);
             EditorUtility.DisplayProgressBar("Compiling", "RefreshHotUpdateSettings", 0.9f);
@@ -142,6 +135,7 @@ namespace HotUpdatePacker.Editor
                 {
                     Thread.Sleep(1000);
                 }
+
                 AssemblyBuilderManager.Build(param);
             }
 
@@ -183,38 +177,41 @@ namespace HotUpdatePacker.Editor
         /// <param name="target"></param>
         /// <param name="throwIfMetaMissing"></param>
         /// <returns></returns>
-        public static bool AOTMetaMissingCheck(bool withBackup, BuildTarget target, bool throwIfMetaMissing = false)
+        public static bool AOTMetaMissingCheck(BuildTarget target, bool throwIfMetaMissing = false)
         {
             var result = true;
             Debug.LogWarning("----------------AOTMetaMissingCheck----------------");
-            var aotDir = withBackup
-                ? HotUpdateBuildSettings.Instance.GetAOTDllBackupPath(target)
-                : SettingsUtil.GetAssembliesPostIl2CppStripDir(target);
-            if (!Directory.Exists(aotDir))
+            var aotDir = HotUpdateBuildSettings.Instance.GetAOTDllBackupPath(target);
+            var msg = "";
+            if (Directory.Exists(aotDir))
             {
-                Debug.LogWarning($"Can't find AOTDir:{aotDir}");
-                return !withBackup;
-            }
+                var checker = new MissingMetadataChecker(aotDir, SettingsUtil.HotUpdateAssemblyNamesIncludePreserved);
+                var hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
+                var noMetaMissing = true;
+                foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
+                {
+                    var dllPath = $"{hotUpdateDir}/{dll}";
+                    var notAnyMissing = checker.Check(dllPath);
+                    noMetaMissing &= notAnyMissing;
+                }
 
-            var checker = new MissingMetadataChecker(aotDir, SettingsUtil.HotUpdateAssemblyNamesIncludePreserved);
-            var hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
-            var noMetaMissing = true;
-            foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
-            {
-                var dllPath = $"{hotUpdateDir}/{dll}";
-                var notAnyMissing = checker.Check(dllPath);
-                noMetaMissing &= notAnyMissing;
+                result = noMetaMissing;
+                if (!noMetaMissing)
+                {
+                    msg = "！！！！AOT MetaData Missing！！！！";
+                }
             }
-
-            if (!noMetaMissing)
+            else
             {
-                var mgs = withBackup
-                    ? "！！！！[Check With BackUp]AOT元数据缺失，需要重新完整编译，或排查热更代码中所使用了的已裁剪掉的AOT模块,切记此时不可推送C#热更！！！！"
-                    : "！！！！[Check With Last Build] AOT元数据缺失，需要重新完整编译，或排查热更代码中所使用了的已裁剪掉的AOT模块！！！！";
-                if (throwIfMetaMissing)
-                    throw new Exception(mgs);
-                Debug.LogError(mgs);
+                msg = $"Can't find AOTDir:{aotDir}";
                 result = false;
+            }
+
+            if (!result)
+            {
+                if (throwIfMetaMissing)
+                    throw new Exception(msg);
+                Debug.LogError(msg);
             }
 
             Debug.LogWarning("----------------AOTMetaMissingCheck Complete----------------");
@@ -265,8 +262,8 @@ namespace HotUpdatePacker.Editor
 
             Debug.LogWarning("----------------BackupAOTAssemblies Complete----------------");
         }
-        
-        public static void Commit(BuildTarget target, string otherMsg, bool showDialog = false)
+
+        public static void Commit(BuildTarget target, string appfullpath, bool showDialog = false)
         {
             if (showDialog && !EditorUtility.DisplayDialog("Warning",
                     "Will you commit AOT Assemblies' modifications to version control system?",
@@ -275,7 +272,7 @@ namespace HotUpdatePacker.Editor
             Debug.LogWarning("----------------Commit to version control system----------------");
             var dstDir = HotUpdateBuildSettings.Instance.GetAOTDllBackupPath(target);
             var prefix = HotUpdateBuildSettings.Instance.commitPrefix;
-            VersionControlSystem.Commit(prefix, dstDir, otherMsg);
+            VersionControlSystem.Commit(prefix, dstDir, appfullpath);
             Debug.LogWarning("----------------Commit Complete----------------");
         }
 

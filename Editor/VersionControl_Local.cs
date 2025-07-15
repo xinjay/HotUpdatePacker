@@ -5,11 +5,11 @@ namespace HotUpdatePacker.Editor
 {
     public class VersionControl_Local : IVersionControl
     {
-        public void Commit(string workingCopyPath, string commitMessage, params object[] param)
+        public void Commit(string workingCopyPath, string commitMessage, string appfullpath)
         {
             try
             {
-                var localFile = $"{param[0]}_aot.zip";
+                var localFile = $"{appfullpath}_aot.zip";
                 ZipFile.CreateFromDirectory(workingCopyPath, localFile);
             }
             catch (Exception ex)

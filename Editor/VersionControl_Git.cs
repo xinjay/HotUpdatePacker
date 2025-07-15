@@ -6,7 +6,7 @@ namespace HotUpdatePacker.Editor
     {
         private const string gitPath = "git";
 
-        public void Commit(string workingCopyPath, string msg, params object[] param)
+        public void Commit(string workingCopyPath, string msg,  string appfullpath)
         {
             var remoteName = "origin"; // 远程仓库名称，默认为origin
             var branchName = "main"; // 替换为你的目标分支名称

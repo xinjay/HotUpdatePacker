@@ -13,13 +13,13 @@ namespace HotUpdatePacker.Editor
         [MenuItem("Build/HotUpdate/BuildCompile", priority = 21)]
         private static void BuildComplile()
         {
-            _ = HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget);
+            HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget);
         }
 
         [MenuItem("Build/HotUpdate/BuildComplileFull", priority = 22)]
         private static void BuildComplileFull()
         {
-            _ = HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
+            HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
                 HotUpdatePackFlag.Full);
         }
 
@@ -27,7 +27,7 @@ namespace HotUpdatePacker.Editor
         [MenuItem("Build/HotUpdate/BuildCompile(Dev)", priority = 33)]
         private static void BuildComplile_dev()
         {
-            _ = HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
+            HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
                 HotUpdatePackFlag.Dev);
         }
 
@@ -35,7 +35,7 @@ namespace HotUpdatePacker.Editor
         [MenuItem("Build/HotUpdate/BuildComplileFull(Dev)", priority = 34)]
         private static void BuildComplileFull_dev()
         {
-            _ = HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
+            HotUpdateBuildPipline.HotUpdateCompile(EditorUserBuildSettings.activeBuildTarget,
                 HotUpdatePackFlag.Dev_Full);
         }
 
@@ -43,7 +43,7 @@ namespace HotUpdatePacker.Editor
         [MenuItem("Build/HotUpdate/AOTMetaMissingCheck", priority = 64)]
         private static void AOTMetaMissingCheck()
         {
-            _ = HotUpdateBuildPipline.AOTMetaMissingCheck(true, EditorUserBuildSettings.activeBuildTarget, false);
+            _ = HotUpdateBuildPipline.AOTMetaMissingCheck(EditorUserBuildSettings.activeBuildTarget, false);
         }
 
 

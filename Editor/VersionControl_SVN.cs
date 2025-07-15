@@ -6,7 +6,7 @@ namespace HotUpdatePacker.Editor
     {
         private const string svnPath = "svn";
 
-        public void Commit(string workingCopyPath, string commitMessage, params object[] param)
+        public void Commit(string workingCopyPath, string commitMessage, string appfullpath)
         {
             try
             {

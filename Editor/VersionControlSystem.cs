@@ -27,12 +27,12 @@ namespace HotUpdatePacker.Editor
         /// </summary>
         /// <param name="prefix"></param>
         /// <param name="workingCopyPath"></param>
-        /// <param name="otherMsg"></param>
-        public static void Commit(string prefix, string workingCopyPath, string otherMsg = "")
+        /// <param name="appfullpath"></param>
+        public static void Commit(string prefix, string workingCopyPath, string appfullpath = "")
         {
-            var commitMessage = $"{prefix} aot dll auto backup[{otherMsg}]";
+            var commitMessage = $"{prefix} aot dll auto backup[{appfullpath}]";
             var type = HotUpdateBuildSettings.Instance.versionControl;
-            versionControlMap[type].Commit(workingCopyPath, commitMessage, otherMsg);
+            versionControlMap[type].Commit(workingCopyPath, commitMessage, appfullpath);
         }
     }
 }
