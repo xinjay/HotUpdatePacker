@@ -20,6 +20,8 @@ HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序
 
 - 简化了HybridCLR打包流程，便于与现有打包流程集成，以支持Jenkins之类的自动化平台；
 
+- 无缝集成[Obfuz](https://github.com/focus-creative-games/obfuz)代码加固混淆方案；
+
 ## 支持的版本与平台
 
 与HybridCRL完全一致；
@@ -39,8 +41,6 @@ HotUpdatePacker是针对HybridCLR的一项扩展，支持依赖于**默认程序
   ![](Image/guide.png)
 
 ## 未来计划
-
-- 集成**[obfuz](https://github.com/focus-creative-games/obfuz)**代码混淆和加固解决方案；
 
 - 持续优化HotUpdatePacker方案；
 
