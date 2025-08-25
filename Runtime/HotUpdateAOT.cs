@@ -124,8 +124,7 @@ namespace HotUpdatePacker.Runtime
         /// <returns></returns>
         private static bool GetAssemblyInGlobal(string klassFullName, out Assembly assembly)
         {
-            Debug.Log(
-                $"---------------------------------------HotUpdateAOT GetAssemblyInGlobal:{klassFullName}---------------------------------------");
+            Debug.Log($"---------------------------------------HotUpdateAOT GetAssemblyInGlobal:{klassFullName}---------------------------------------");
             assembly = null;
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
             foreach (var ass in assemblies)

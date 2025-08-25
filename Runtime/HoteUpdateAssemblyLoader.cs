@@ -11,12 +11,12 @@ namespace HotUpdatePacker.Runtime
         private static bool initialized = false;
         private static HotUpdateSettings _hotUpdateSettings;
         private static IAssetsLoader resLoader;
-
+        
         /// <summary>
-        /// 初始化程序集加载器（热更新资源下载后调用）
+        /// 初始化程序集加载器
         /// </summary>
         /// <param name="loader"></param>
-        public static async ValueTask Init(IAssetsLoader loader)
+        public static async Task Init(IAssetsLoader loader)
         {
             if (initialized)
                 return;
@@ -28,16 +28,23 @@ namespace HotUpdatePacker.Runtime
             await LoadHotUpdateAssemblies();
             ReflectCallReflector();
         }
-
+        
         /// <summary>
         /// 加载程序集热更配置
         /// </summary>
         private static async ValueTask LoadHotUpdateSettings()
         {
-            var waiter = new AsyncAwaiter<string>();
-            resLoader.LoadText(HotUpdateAOTDefines.HotUpdateSettingsName, waiter.SetResult);
-            var json = await waiter;
-            _hotUpdateSettings = JsonUtility.FromJson<HotUpdateSettings>(json);
+            try
+            {
+                var waiter = new AsyncAwaiter<string>();
+                resLoader.LoadText(HotUpdateAOTDefines.HotUpdateSettingsName, waiter.SetResult);
+                var json = await waiter;
+                _hotUpdateSettings = JsonUtility.FromJson<HotUpdateSettings>(json);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e);
+            }
         }
 
         /// <summary>
@@ -49,33 +56,40 @@ namespace HotUpdatePacker.Runtime
             {
                 var dll = meta.aotDllName;
                 var mode = meta.mode;
-                var waiter = new AsyncAwaiter<byte[]>();
-                resLoader.LoadBytes(dll, waiter.SetResult);
-                var bytes = await waiter;
                 try
                 {
+                    var waiter = new AsyncAwaiter<byte[]>();
+                    resLoader.LoadBytes(dll, waiter.SetResult);
+                    var bytes = await waiter;
+                    var code = LoadImageErrorCode.OK;
                     try
                     {
-                        RuntimeApi.LoadMetadataForAOTAssembly(bytes, mode);
+                        code = RuntimeApi.LoadMetadataForAOTAssembly(bytes, mode);
                     }
                     catch (Exception e)
                     {
                         switch (mode)
                         {
                             case HomologousImageMode.Consistent: //Consistent 模式补充元数据失败，则尝试用SuperSet模式补充
-                                RuntimeApi.LoadMetadataForAOTAssembly(bytes, HomologousImageMode.SuperSet);
+                                code = RuntimeApi.LoadMetadataForAOTAssembly(bytes, HomologousImageMode.SuperSet);
                                 break;
                             default:
                                 throw;
                         }
                     }
+
+                    if (code != LoadImageErrorCode.OK)
+                    {
+                        Debug.LogError($"LoadMetaData Error:{code}");
+                    }
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"{dll}->{e.Message}");
+                    Debug.LogError($"{dll}->{e}");
                 }
             }
         }
+
 
         /// <summary>
         /// 加载热更程序集
@@ -84,11 +98,18 @@ namespace HotUpdatePacker.Runtime
         {
             foreach (var dll in _hotUpdateSettings.hotUpdateDllNames)
             {
-                var waiter = new AsyncAwaiter<byte[]>();
-                resLoader.LoadBytes(dll, waiter.SetResult);
-                var bytes = await waiter;
-                var ass = Assembly.Load(bytes);
-                HotUpdateAOT.RegisteReflectionAssembly(dll, ass);
+                try
+                {
+                    var waiter = new AsyncAwaiter<byte[]>();
+                    resLoader.LoadBytes(dll, waiter.SetResult);
+                    var bytes = await waiter;
+                    var ass = Assembly.Load(bytes);
+                    HotUpdateAOT.RegisteReflectionAssembly(dll, ass);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                }
             }
         }
 
@@ -97,8 +118,15 @@ namespace HotUpdatePacker.Runtime
         /// </summary>
         private static void ReflectCallReflector()
         {
-            HotUpdateAOT.ReflectCallMethod(HotUpdateAOTDefines.ReflectorFullName, HotUpdateAOTDefines.ReflectCall,
-                BindingFlags.Static | BindingFlags.NonPublic, null, null);
+            try
+            {
+                HotUpdateAOT.ReflectCallMethod(HotUpdateAOTDefines.ReflectorFullName, HotUpdateAOTDefines.ReflectCall,
+                    BindingFlags.Static | BindingFlags.NonPublic, null, null);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(e);
+            }
         }
     }
 }

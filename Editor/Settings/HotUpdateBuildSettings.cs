@@ -13,6 +13,7 @@ namespace HotUpdatePacker.Editor.Settings
     {
         public string assemblyName;
         public string compileDir;
+        public string Mvid = System.Guid.NewGuid().ToString();
         [Tooltip("Separated by\"|\"")] public string defines;
         [Tooltip("Separated by\"|\"")] public string depend_ass;
         [Tooltip("Separated by\"|\"")] public string depend_dll;
@@ -26,6 +27,7 @@ namespace HotUpdatePacker.Editor.Settings
     {
         public string commitPrefix = "[XXXX]";
         public VersionControlType versionControl;
+        public string ObfuzLinkPath = "Assets/Sample/Obfuz/link.xml";
         public string HotUpdateSettingsFile = "Assets/Sample/Res/Assembly/HotUpdateSettings.bytes";
         public string AOTDllBackupDir = "HotUpdatePacker/AOTBackup";
         public string AOTMetaDllDir = "Assets/Sample/Res/Assembly/AOTMeta";
@@ -123,15 +125,14 @@ namespace HotUpdatePacker.Editor.Settings
                     }
                 }
             }
-
             //再添加
             foreach (var ass in assemblies)
             {
-
                 if (hotass.Contains(ass.assemblyName))
                 {
                     continue;
                 }
+
                 tempList.Add(ass.assemblyName);
                 dirty = true;
             }

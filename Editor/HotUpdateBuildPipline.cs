@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 using HotUpdatePacker.Editor.Settings;
 using HotUpdatePacker.Runtime;
 using UnityEngine;
@@ -14,7 +15,11 @@ using HybridCLR.Editor.Commands;
 using HybridCLR.Editor.HotUpdate;
 using HybridCLR.Editor.Installer;
 using HybridCLR.Editor.Meta;
+using Obfuz;
+using Obfuz.Settings;
+using Obfuz4HybridCLR;
 using UnityEditor;
+using Debug = UnityEngine.Debug;
 
 namespace HotUpdatePacker.Editor
 {
@@ -27,6 +32,7 @@ namespace HotUpdatePacker.Editor
         FastBuild = 1 << 2,
         Dev_Full = Dev | Full
     }
+
 
     public static class HotUpdateBuildPipline
     {
@@ -43,48 +49,68 @@ namespace HotUpdatePacker.Editor
         {
             var full = flag.HasTarget(HotUpdatePackFlag.Full);
             var developmentBuild = flag.HasTarget(HotUpdatePackFlag.Dev);
+            var fastBuild = flag.HasTarget(HotUpdatePackFlag.FastBuild);
             var targetGroup = BuildPipeline.GetBuildTargetGroup(target);
-
             Debug.LogWarning($"----------------HotUpdateCompile:FullCompile:{full}----------------");
             EnvironmentCheck();
             EditorUtility.DisplayProgressBar("Compiling", "HybridHotUpdateAssemblies", 0.1f);
+
+            TimeWatch.TimeStart();
             DoHybridHotUpdateCompile(target, developmentBuild);
+            TimeWatch.TimeStamp("HybridHotUpdateAssemblies");
+
             EditorUtility.DisplayProgressBar("Compiling", "CustomHotUpdateAssemblies", 0.2f);
+
             DoCustomCompile(target, targetGroup, developmentBuild);
+            TimeWatch.TimeStamp("CustomHotUpdateAssemblies");
+
+            EditorUtility.DisplayProgressBar("Compiling", "ObfuseAssemblies", 0.3f);
+            ObfuseAssemblies(target);
+            TimeWatch.TimeStamp("ObfuseAssemblies");
             //先执行上次build的aot元数据裁剪校验
-            EditorUtility.DisplayProgressBar("Compiling", "AOTMetaMissingCheck", 0.3f);
-            var success = AOTMetaMissingCheck(target, !full);
+            EditorUtility.DisplayProgressBar("Compiling", "AOTMetaMissingCheck", 0.4f);
+            var success = AOTMetaMissingCheck(target, !full) && fastBuild;
+            TimeWatch.TimeStamp("AOTMetaMissingCheck");
+
             //完全编译并且和上次aot元数据裁剪校验没通过时，才执行完整编译
             if (!success && full)
             {
-                EditorUtility.DisplayProgressBar("Compiling", "MetaGenerate", 0.4f);
+                EditorUtility.DisplayProgressBar("Compiling", "MetaGenerate", 0.5f);
                 DoHybridMetaGenerate(target);
-                EditorUtility.DisplayProgressBar("Compiling", "StripAOT", 0.5f);
-                StripAOTAssemblyMetadata(target);
+                TimeWatch.TimeStamp("DoHybridMetaGenerate");
                 EditorUtility.DisplayProgressBar("Compiling", "BackupAOTAssemblies", 0.6f);
                 BackupAOTAssemblies(target);
+                TimeWatch.TimeStamp("BackupAOTAssemblies");
             }
+
+            StripAOTAssemblyMetadata(target);
+            TimeWatch.TimeStamp("StripAOTAssemblyMetadata");
+            EditorUtility.DisplayProgressBar("Compiling", "StripAOTAssemblyMetadata", 0.7f);
 
             EditorUtility.DisplayProgressBar("Compiling", "CopyHotUpdateAssemblies", 0.8f);
             CopyHotUpdateAssemblies(target);
+            TimeWatch.TimeStamp("CopyHotUpdateAssemblies");
             EditorUtility.DisplayProgressBar("Compiling", "RefreshHotUpdateSettings", 0.9f);
             RefreshHotUpdateSettings();
+            TimeWatch.TimeStamp("RefreshHotUpdateSettings");
             EditorUtility.DisplayProgressBar("Compiling", "HotUpdateCompile Complete", 1);
             Debug.LogWarning("----------------HotUpdateCompile Complete----------------");
             EditorUtility.ClearProgressBar();
+            TimeWatch.TimeEnd("HotUpdateCompile");
         }
 
         private static void EnvironmentCheck()
         {
             var installer = new InstallerController();
-            if (!installer.HasInstalledHybridCLR())
+            //没有安装时或者版本不兼容时，自动安装
+            if (!installer.HasInstalledHybridCLR() ||
+                installer.PackageVersion != installer.InstalledLibil2cppVersion)
             {
-                //没有安装时，自动安装
-                installer.InstallDefaultHybridCLR();
+                var dir = "HybridCLRData/il2cpp_plus_repo/libil2cpp";
+                installer.InstallFromLocal(dir);
                 Debug.LogWarning("Auto install HybridCLR");
             }
         }
-
 
         /// <summary>
         /// Hybrid元数据、桥接函数等生成流程（完整打包时）
@@ -93,14 +119,45 @@ namespace HotUpdatePacker.Editor
         {
             Debug.LogWarning("----------------DoHybridAOTMetaGenerate----------------");
             Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+            ObfuscateUtil.GeneratePolymorphicCodes($"{SettingsUtil.LocalIl2CppDir}/libil2cpp");
             // 这几个生成依赖HotUpdateDlls
             LinkGeneratorCommand.GenerateLinkXml(target);
+            GenerateObfuzLinkXml(target);
             // 生成裁剪后的aot dll
             StripAOTDllCommand.GenerateStripedAOTDlls(target);
             // 桥接函数生成依赖于AOT dll，必须保证已经build过，生成AOT dll
-            MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper(target);
+            // MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper(target);
             AOTReferenceGeneratorCommand.GenerateAOTGenericReference(target);
+            var obfuscatedHotUpdateDllPath = PrebuildCommandExt.GetObfuscatedHotUpdateAssemblyOutputPath(target);
+            PrebuildCommandExt.GenerateMethodBridgeAndReversePInvokeWrapper(target, obfuscatedHotUpdateDllPath);
             Debug.LogWarning("----------------DoHybridAOTMetaGenerate Complete----------------");
+        }
+
+        /// <summary>
+        /// 生成Obfuz后的linkxml
+        /// </summary>
+        /// <param name="target"></param>
+        public static void GenerateObfuzLinkXml(BuildTarget target)
+        {
+            var obfuzSettings = ObfuzSettings.Instance;
+            var assemblySearchDirs = new List<string> { SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target) };
+            var builder = ObfuscatorBuilder.FromObfuzSettings(obfuzSettings, target, true);
+            builder.InsertTopPriorityAssemblySearchPaths(assemblySearchDirs);
+            var obfuz = builder.Build();
+            obfuz.Run();
+            var hotfixAssemblies = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
+            var analyzer =
+                new HybridCLR.Editor.Link.Analyzer(
+                    new PathAssemblyResolver(obfuzSettings.GetObfuscatedAssemblyOutputPath(target)));
+            var refTypes = analyzer.CollectRefs(hotfixAssemblies);
+            // HyridCLR中 LinkXmlWritter不是public的，在其他程序集无法访问，只能通过反射操作
+            var linkXmlWriter = typeof(SettingsUtil).Assembly.GetType("HybridCLR.Editor.Link.LinkXmlWriter");
+            var writeMethod = linkXmlWriter.GetMethod("Write", BindingFlags.Public | BindingFlags.Instance);
+            var instance = Activator.CreateInstance(linkXmlWriter);
+            var linkXmlOutputPath = HotUpdateBuildSettings.Instance.ObfuzLinkPath;
+            writeMethod.Invoke(instance, new object[] { linkXmlOutputPath, refTypes });
+            Debug.Log($"[GenerateLinkXmlForObfuscatedAssembly] output:{linkXmlOutputPath}");
+            AssetDatabase.Refresh();
         }
 
         /// <summary>
@@ -148,6 +205,14 @@ namespace HotUpdatePacker.Editor
             Debug.LogWarning("----------------DoCustomCompile Complete----------------");
         }
 
+        public static void ObfuseAssemblies(BuildTarget target)
+        {
+            Debug.LogWarning("----------------ObfuseAssemblies----------------");
+            var obfuscatedHotUpdateDllPath = PrebuildCommandExt.GetObfuscatedHotUpdateAssemblyOutputPath(target);
+            ObfuscateUtil.ObfuscateHotUpdateAssemblies(target, obfuscatedHotUpdateDllPath);
+            Debug.LogWarning("----------------ObfuseAssemblies Complete----------------");
+        }
+
         /// <summary>
         /// 裁剪AOT补充元数据程序集
         /// </summary>
@@ -155,6 +220,7 @@ namespace HotUpdatePacker.Editor
         {
             Debug.LogWarning("----------------StripAOTAssemblyMetadata----------------");
             var srcDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(target);
+            //var srcDir = PrebuildCommandExt.GetObfuscatedHotUpdateAssemblyOutputPath(target);
             var aotmetas = GenerateAOTGenericReference(target);
             var dstDir = HotUpdateBuildSettings.Instance.AOTMetaDllDir;
             BuilderUtil.CreateDir(dstDir, true);
@@ -163,8 +229,13 @@ namespace HotUpdatePacker.Editor
                 var dllName = Path.GetFileNameWithoutExtension(src);
                 if (!aotmetas.Contains(dllName))
                     continue;
+                var temp = $"Library/{dllName}.dll";
                 var dstFile = $"{dstDir}/{dllName}.bytes";
-                AOTAssemblyMetadataStripper.Strip(src, dstFile);
+                if (File.Exists(temp))
+                    File.Delete(temp);
+                AOTAssemblyMetadataStripper.Strip(src, temp);
+                //生成AOT多态dll
+                ObfuscateUtil.GeneratePolymorphicDll(temp, dstFile);
             }
 
             Debug.LogWarning("----------------StripAOTAssemblyMetadata Complete----------------");
@@ -183,29 +254,40 @@ namespace HotUpdatePacker.Editor
             Debug.LogWarning("----------------AOTMetaMissingCheck----------------");
             var aotDir = HotUpdateBuildSettings.Instance.GetAOTDllBackupPath(target);
             var msg = "";
-            if (Directory.Exists(aotDir))
+            try
             {
-                var checker = new MissingMetadataChecker(aotDir, SettingsUtil.HotUpdateAssemblyNamesIncludePreserved);
-                var hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
-                var noMetaMissing = true;
-                foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
+                if (Directory.Exists(aotDir))
                 {
-                    var dllPath = $"{hotUpdateDir}/{dll}";
-                    var notAnyMissing = checker.Check(dllPath);
-                    noMetaMissing &= notAnyMissing;
-                }
+                    var checker =
+                        new MissingMetadataChecker(aotDir, SettingsUtil.HotUpdateAssemblyNamesIncludePreserved);
+                    //var hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
+                    var hotUpdateDir = PrebuildCommandExt.GetObfuscatedHotUpdateAssemblyOutputPath(target);
+                    var noMetaMissing = true;
+                    foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
+                    {
+                        var dllPath = $"{hotUpdateDir}/{dll}";
+                        var notAnyMissing = checker.Check(dllPath);
+                        noMetaMissing &= notAnyMissing;
+                    }
 
-                result = noMetaMissing;
-                if (!noMetaMissing)
+                    result = noMetaMissing;
+                    if (!noMetaMissing)
+                    {
+                        msg = "！！！！AOT MetaData Missing！！！！";
+                    }
+                }
+                else
                 {
-                    msg = "！！！！AOT MetaData Missing！！！！";
+                    msg = $"Can't find AOTDir:{aotDir}";
+                    result = false;
                 }
             }
-            else
+            catch (Exception e)
             {
-                msg = $"Can't find AOTDir:{aotDir}";
                 result = false;
+                msg = e.ToString();
             }
+
 
             if (!result)
             {
@@ -226,13 +308,15 @@ namespace HotUpdatePacker.Editor
             Debug.LogWarning("----------------CopyHotUpdateAssemblies----------------");
             var hotUpdateDir = HotUpdateBuildSettings.Instance.HotUpdateDllDir;
             BuilderUtil.CreateDir(hotUpdateDir, true);
-            var hotUpdateDllOutput = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
+            //var hotUpdateDllOutput = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
+            var hotUpdateDllOutput = PrebuildCommandExt.GetObfuscatedHotUpdateAssemblyOutputPath(target);
             foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
             {
                 var dllName = Path.GetFileNameWithoutExtension(dll);
                 var dllPath = $"{hotUpdateDllOutput}/{dll}";
                 var destPath = $"{hotUpdateDir}/{dllName}.bytes";
-                File.Copy(dllPath, destPath, true);
+                //生成Hotupdate多态dll
+                ObfuscateUtil.GeneratePolymorphicDll(dllPath, destPath);
             }
 
             Debug.LogWarning("----------------CopyHotUpdateAssemblies Complete----------------");
@@ -247,8 +331,6 @@ namespace HotUpdatePacker.Editor
                     "This operation will overwrite the backed-up AOT assemblies. Please remember to incorporate them into version management in a timely manner.",
                     "Confirm", "Cancel"))
                 return;
-
-
             Debug.LogWarning("----------------BackupAOTAssemblies----------------");
             var srcDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(target);
             var dstDir = HotUpdateBuildSettings.Instance.GetAOTDllBackupPath(target);
@@ -314,7 +396,6 @@ namespace HotUpdatePacker.Editor
             var modules = new HashSet<dnlib.DotNet.ModuleDef>(
                 types.Select(t => t.Type.Module).Concat(methods.Select(m => m.Method.Module))).ToList();
             modules.Sort((a, b) => a.Name.CompareTo(b.Name));
-
             var result = new List<string>();
             foreach (var module in modules)
             {

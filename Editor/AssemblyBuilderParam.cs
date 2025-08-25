@@ -15,6 +15,7 @@ namespace HotUpdatePacker.Editor
         public BuildTargetGroup targetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
         public bool developmentBuild;
         public bool generateXml;
+        public string Mvid;
 
         public static AssemblyBuilderParam GetBuildParam(HotUpdateItem cfg, BuildTarget target)
         {
@@ -44,6 +45,7 @@ namespace HotUpdatePacker.Editor
                 assemblyName = assemblyName,
                 destPath = HotUpdateBuildSettings.Instance.HotUpdateDllDir,
                 compileDir = cfg.compileDir,
+                Mvid = cfg.Mvid,
                 defines = cfg.GetDefines(),
                 otherReferences = otherReference.ToArray(),
                 target = target

@@ -9,6 +9,7 @@ namespace HotUpdatePacker.Editor.Settings
         private SerializedObject _serializedObject;
         private SerializedProperty _commitPrefix;
         private SerializedProperty _versionControl;
+        private SerializedProperty _obfuzLinkPath;
         private SerializedProperty _hotUpdateSettingsFile;
         private SerializedProperty _AOTDllBackupDir;
         private SerializedProperty _AOTMetaDllDir;
@@ -32,6 +33,7 @@ namespace HotUpdatePacker.Editor.Settings
             _serializedObject = new SerializedObject(setting);
             _commitPrefix = _serializedObject.FindProperty("commitPrefix");
             _versionControl = _serializedObject.FindProperty("versionControl");
+            _obfuzLinkPath = _serializedObject.FindProperty("ObfuzLinkPath");
             _hotUpdateSettingsFile = _serializedObject.FindProperty("HotUpdateSettingsFile");
             _AOTDllBackupDir = _serializedObject.FindProperty("AOTDllBackupDir");
             _AOTMetaDllDir = _serializedObject.FindProperty("AOTMetaDllDir");
@@ -52,6 +54,7 @@ namespace HotUpdatePacker.Editor.Settings
             EditorGUILayout.PropertyField(_commitPrefix);
             EditorGUILayout.PropertyField(_versionControl);
             GUILayout.EndHorizontal();
+            EditorGUILayout.PropertyField(_obfuzLinkPath);
             EditorGUILayout.PropertyField(_hotUpdateSettingsFile);
             EditorGUILayout.PropertyField(_AOTDllBackupDir);
             EditorGUILayout.PropertyField(_AOTMetaDllDir);
